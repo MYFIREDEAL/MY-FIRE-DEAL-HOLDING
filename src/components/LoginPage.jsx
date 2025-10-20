@@ -1,0 +1,197 @@
+
+import React, { useState } from "react";
+import { LogIn, Mail, Lock } from "lucide-react";
+
+export default function LoginPage({ onSuccess }) {
+  const DEMO_EMAIL = "jack.luc@icloud.com";
+  const DEMO_PASSWORD = "password";
+  const [email, setEmail] = useState(DEMO_EMAIL);
+  const [password, setPassword] = useState(DEMO_PASSWORD);
+  const [status, setStatus] = useState({ type: "", message: "" });
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+
+    if (email === DEMO_EMAIL && password === DEMO_PASSWORD) {
+      setStatus({
+        type: "success",
+        message: "Connexion réussie. Redirection vers votre espace...",
+      });
+      window.setTimeout(() => {
+        if (onSuccess) {
+          onSuccess();
+        }
+      }, 600);
+    } else {
+      setStatus({
+        type: "error",
+        message:
+          "Identifiants invalides. Utilisez jack.luc@icloud.com / password.",
+      });
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white">
+      <div className="relative flex min-h-screen flex-col lg:flex-row">
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute -left-32 top-12 h-72 w-72 rounded-full bg-indigo-500/40 blur-3xl" />
+          <div className="absolute bottom-12 -right-24 h-96 w-96 rounded-full bg-purple-500/30 blur-[120px]" />
+        </div>
+
+        <div className="relative flex flex-1 flex-col justify-center px-6 py-16 sm:px-12 lg:px-16">
+          <div className="max-w-xl">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1 text-sm font-medium uppercase tracking-wider text-white/70 backdrop-blur">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              Bienvenue sur MY FIRE DEAL
+            </div>
+
+            <h1 className="mt-6 text-4xl font-semibold leading-tight sm:text-5xl">
+              Accédez à votre
+              <span className="bg-gradient-to-r from-indigo-300 via-purple-300 to-cyan-300 bg-clip-text text-transparent">
+                {" "}
+                espace de pilotage stratégique
+              </span>
+            </h1>
+
+            <p className="mt-6 text-lg text-white/70">
+              Connectez-vous pour suivre vos deals, monitorer vos filiales et
+              piloter vos opérations financières en temps réel. Centralisez vos
+              flux et gagnez en impact.
+            </p>
+
+            <dl className="mt-10 grid gap-6 sm:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                <dt className="text-sm uppercase tracking-wider text-white/60">
+                  Contrôle
+                </dt>
+                <dd className="mt-2 text-2xl font-semibold text-white">
+                  Vue holding & filiales
+                </dd>
+                <p className="mt-2 text-sm text-white/60">
+                  Consolidez vos activités et suivez les indicateurs clés de
+                  votre groupe.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-5">
+                <dt className="text-sm uppercase tracking-wider text-white/60">
+                  Financement
+                </dt>
+                <dd className="mt-2 text-2xl font-semibold text-white">
+                  Accès direct NESPIS
+                </dd>
+                <p className="mt-2 text-sm text-white/60">
+                  Activez vos lignes bancaires et suivez les engagements en
+                  instantané.
+                </p>
+              </div>
+            </dl>
+          </div>
+        </div>
+
+        <div className="relative flex flex-1 items-center justify-center bg-slate-950/60 px-6 py-16 sm:px-12 lg:px-16">
+          <div className="h-full w-full max-w-md rounded-3xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl shadow-indigo-900/40 backdrop-blur">
+            <div className="flex items-center gap-3 text-indigo-200">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500/20">
+                <LogIn className="h-5 w-5" />
+              </div>
+              <span className="text-sm font-medium uppercase tracking-widest text-white/70">
+                Connexion sécurisée
+              </span>
+            </div>
+
+            <h2 className="mt-6 text-3xl font-semibold text-white">
+              Se connecter
+            </h2>
+
+            <p className="mt-4 text-sm text-white/60">
+              Identifiants de démonstration : {DEMO_EMAIL} / {DEMO_PASSWORD}
+            </p>
+
+            {status.message && (
+              <div
+                className={`mt-6 rounded-2xl border px-4 py-3 text-sm ${
+                  status.type === "success"
+                    ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"
+                    : "border-rose-400/30 bg-rose-400/10 text-rose-200"
+                }`}
+              >
+                {status.message}
+              </div>
+            )}
+
+            <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+              <div className="space-y-4">
+                <label className="block text-sm font-medium text-white/70">
+                  Adresse e-mail
+                  <div className="mt-2 flex items-center rounded-2xl border border-white/10 bg-slate-900/80 px-4">
+                    <Mail className="h-5 w-5 text-white/50" />
+                    <input
+                      type="email"
+                      name="email"
+                      placeholder="vous@myfiredeal.com"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      className="w-full bg-transparent px-3 py-3 text-white placeholder:text-white/40 focus:outline-none"
+                      autoComplete="email"
+                    />
+                  </div>
+                </label>
+
+                <label className="block text-sm font-medium text-white/70">
+                  Mot de passe
+                  <div className="mt-2 flex items-center rounded-2xl border border-white/10 bg-slate-900/80 px-4">
+                    <Lock className="h-5 w-5 text-white/50" />
+                    <input
+                      type="password"
+                      name="password"
+                      placeholder="********"
+                      value={password}
+                      onChange={(event) => setPassword(event.target.value)}
+                      className="w-full bg-transparent px-3 py-3 text-white placeholder:text-white/40 focus:outline-none"
+                      autoComplete="current-password"
+                    />
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-sm text-white/70">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-white/20 bg-slate-900/50 text-indigo-400 focus:ring-indigo-500"
+                  />
+                  Se souvenir de moi
+                </label>
+                <button
+                  type="button"
+                  className="text-sm font-medium text-indigo-200 hover:text-indigo-100"
+                >
+                  Mot de passe oublié ?
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:shadow-indigo-900/70"
+              >
+                <LogIn className="h-5 w-5" />
+                Connexion
+              </button>
+
+              <p className="text-center text-sm text-white/60">
+                Besoin d&apos;un accès ?{" "}
+                <a
+                  href="#contact"
+                  className="font-medium text-indigo-200 hover:text-indigo-100"
+                >
+                  Contactez l&apos;équipe MY COPILOT IA
+                </a>
+              </p>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
