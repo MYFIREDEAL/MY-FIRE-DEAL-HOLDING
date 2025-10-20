@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PlusCircle, X } from "lucide-react";
 import LoginPage from "./components/LoginPage";
-import { supabase } from './supabaseClient';
 
 // Menu Profil utilisateur (démonstration)
 function ProfileMenu() {
@@ -85,22 +84,42 @@ const INITIAL_PROJECT = {
   priorite: 'Moyenne',
 };
 
-const mapProjectRecord = (record) => ({
-  id: record?.id ?? null,
-  nom: record?.nom ?? '',
-  type: record?.type ?? '',
-  typeProjet: record?.type_projet ?? '',
-  partenaire: record?.partenaire ?? '',
-  statut: record?.statut ?? '',
-  objectif: record?.objectif ?? '',
-  action: record?.action ?? '',
-  promptMarketing: record?.prompt_marketing ?? '',
-  promptPartenaire: record?.prompt_partenaire ?? '',
-  promptVendeur: record?.prompt_vendeur ?? '',
-  promptSpecialiste: record?.prompt_specialiste ?? '',
-  priorite: record?.priorite ?? 'Moyenne',
-});
+const LOCAL_PROJECTS_KEY = 'myfiredeal.projects';
 
+const generateProjectId = () => {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
+const loadProjects = () => {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(LOCAL_PROJECTS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((project) => ({
+      ...INITIAL_PROJECT,
+      ...project,
+      id: project.id ?? generateProjectId(),
+    }));
+  } catch (err) {
+    console.warn('Impossible de charger les projets locaux :', err);
+    return [];
+  }
+};
+
+const saveProjects = (projects) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(projects));
+  } catch (err) {
+    console.warn('Impossible de sauvegarder les projets locaux :', err);
+    throw err;
+  }
+};
 
 export default function MyFireDealApp() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -116,6 +135,10 @@ function Dashboard() {
   const [newProject, setNewProject] = useState(() => ({ ...INITIAL_PROJECT }));
   const [isSaving, setIsSaving] = useState(false);
   const [formStatus, setFormStatus] = useState({ type: '', message: '' });
+
+  useEffect(() => {
+    setProjects(loadProjects());
+  }, []);
 
   const resetProjectForm = (typeProjet = selectedType) => {
     setNewProject(() => ({ ...INITIAL_PROJECT, typeProjet }));
@@ -133,90 +156,43 @@ function Dashboard() {
     resetProjectForm(typeProjet);
   };
 
-  const fetchProjects = useCallback(async () => {
-    if (!supabase) {
-      console.warn('Impossible de charger les projets : client Supabase absent.');
-      return;
-    }
-    try {
-      const { data, error } = await supabase
-        .from('projets')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setProjects((data || []).map(mapProjectRecord));
-    } catch (err) {
-      console.error('❌ Chargement des projets impossible :', err.message);
-    }
-  }, [supabase]);
-
-  useEffect(() => {
-    fetchProjects();
-  }, [fetchProjects]);
-
   const handleAddProject = async () => {
     if (isSaving) return;
+
+    setIsSaving(true);
+    setFormStatus({ type: '', message: '' });
+
+    const projectToSave = {
+      id: generateProjectId(),
+      nom: newProject.nom,
+      type: newProject.type,
+      typeProjet: newProject.typeProjet,
+      partenaire: newProject.partenaire,
+      statut: newProject.statut,
+      objectif: newProject.objectif,
+      action: newProject.action,
+      promptMarketing: newProject.promptMarketing,
+      promptPartenaire: newProject.promptPartenaire,
+      promptVendeur: newProject.promptVendeur,
+      promptSpecialiste: newProject.promptSpecialiste,
+      priorite: newProject.priorite,
+      created_at: new Date().toISOString(),
+    };
+
     try {
-      if (!supabase) {
-        const message = 'Supabase n’est pas configuré. Vérifiez VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY.';
-        console.error(`❌ ${message}`);
-        setFormStatus({ type: 'error', message });
-        return;
-      }
-      setIsSaving(true);
-      setFormStatus({ type: '', message: '' });
-      // Récupère l'id du bloc selon le type du projet
-      const { data: blocs, error: blocError } = await supabase
-        .from('blocs')
-        .select('id, nom')
-
-      if (blocError) throw blocError
-
-      const bloc = (blocs || []).find(
-        (b) => b.nom === (newProject.typeProjet === 'Filiale' ? 'MY FIRE DEAL' : 'DEAL')
-      )
-
-      if (!bloc) {
-        throw new Error('Bloc non trouvé (ajoutez une entrée "MY FIRE DEAL" ou "DEAL" dans la table blocs).');
-      }
-
-      // Enregistre le projet
-      const { data: insertedProjects, error } = await supabase
-        .from('projets')
-        .insert([
-          {
-            bloc_id: bloc.id,
-            nom: newProject.nom,
-            type: newProject.type,
-            type_projet: newProject.typeProjet,
-            partenaire: newProject.partenaire,
-            statut: newProject.statut,
-            objectif: newProject.objectif,
-            priorite: newProject.priorite,
-            action: newProject.action,
-            prompt_marketing: newProject.promptMarketing,
-            prompt_partenaire: newProject.promptPartenaire,
-            prompt_vendeur: newProject.promptVendeur,
-            prompt_specialiste: newProject.promptSpecialiste,
-          },
-        ])
-        .select()
-
-      if (error) throw error
-
-      console.log('✅ Projet enregistré')
-      setFormStatus({ type: 'success', message: 'Projet enregistré avec succès.' });
-      if (insertedProjects?.length) {
-        setProjects((prev) => [mapProjectRecord(insertedProjects[0]), ...prev]);
-      } else {
-        fetchProjects();
-      }
-      setSelectedType(newProject.typeProjet || 'Filiale');
-      closeCreateModal(newProject.typeProjet);
+      setProjects((prev) => {
+        const updated = [projectToSave, ...prev];
+        saveProjects(updated);
+        return updated;
+      });
+      setSelectedType(projectToSave.typeProjet || 'Filiale');
+      closeCreateModal(projectToSave.typeProjet);
     } catch (err) {
-      console.error('❌ Erreur :', err.message)
-      setFormStatus({ type: 'error', message: err.message || 'Enregistrement impossible.' });
+      console.error('❌ Enregistrement local impossible :', err);
+      setFormStatus({
+        type: 'error',
+        message: 'Impossible d’enregistrer le projet localement.',
+      });
     } finally {
       setIsSaving(false);
     }
@@ -466,7 +442,9 @@ function Dashboard() {
                 className={`mb-6 rounded-xl border px-4 py-3 text-sm ${
                   formStatus.type === 'success'
                     ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-600'
-                    : 'border-rose-400/40 bg-rose-400/10 text-rose-600'
+                    : formStatus.type === 'warning'
+                      ? 'border-amber-400/40 bg-amber-300/10 text-amber-600'
+                      : 'border-rose-400/40 bg-rose-400/10 text-rose-600'
                 }`}
               >
                 {formStatus.message}
