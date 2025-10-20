@@ -1,4 +1,4 @@
-name: Deploy Vite/React to GitHub Pages (docs)
+name: Deploy to GitHub Pages
 
 on:
   push:
@@ -6,44 +6,40 @@ on:
       - main
 
 permissions:
+  contents: read
   pages: write
   id-token: write
 
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 jobs:
-  build-and-deploy:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: 20
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Vite project
+      - name: Build
         run: npm run build
 
-      - name: Ensure build is in docs/
-        run: |
-          if [ -d dist ]; then
-            rm -rf docs
-            mv dist docs
-          fi
-
-      - name: Upload docs/ as GitHub Pages artifact
+      - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
+          path: ./dist
 
       - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
-
-# Côté repo :
-# - Activer GitHub Pages dans Settings > Pages
-# - Choisir la branche main et le dossier /docs comme source
-# - Le workflow utilise les actions officielles (upload-pages-artifact, deploy-pages)
-# - Permissions pages et id-token sont requises
