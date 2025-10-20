@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { PlusCircle, X } from "lucide-react";
 import LoginPage from "./components/LoginPage";
+import { supabase } from './supabaseClient';
 
 // Menu Profil utilisateur (démonstration)
 function ProfileMenu() {
@@ -167,13 +168,29 @@ function Dashboard() {
     resetProjectForm(typeProjet);
   };
 
-  const handleAddProject = async () => {
+  const handleAddProject = async (event) => {
+    event?.preventDefault?.();
     if (isSaving) return;
 
     setIsSaving(true);
     setFormStatus({ type: '', message: '' });
 
-    const projectToSave = {
+    const payload = {
+      nom_du_projet: newProject.nom || null,
+      type_projet: newProject.typeProjet || null,
+      type_secteur: newProject.type || null,
+      partenaire_client: newProject.partenaire || null,
+      statut: newProject.statut || null,
+      objectif: newProject.objectif || null,
+      prochaine_action: newProject.action || null,
+      prompt_marketing: newProject.promptMarketing || null,
+      prompt_partenaire: newProject.promptPartenaire || null,
+      prompt_vendeur: newProject.promptVendeur || null,
+      prompt_specialiste: newProject.promptSpecialiste || null,
+      priorite: newProject.priorite || null,
+    };
+
+    const fallbackProject = {
       id: generateProjectId(),
       nom: newProject.nom,
       type: newProject.type,
@@ -191,19 +208,71 @@ function Dashboard() {
     };
 
     try {
+      let inserted = null;
+
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('projects')
+          .insert([payload])
+          .select()
+          .maybeSingle();
+
+        if (error) {
+          throw error;
+        }
+
+        inserted = data;
+        console.log('✅ Projet ajouté :', data);
+        alert('Projet créé avec succès !');
+      } else {
+        console.warn('Supabase non configuré, enregistrement local uniquement.');
+      }
+
+      const projectToStore = inserted
+        ? {
+            id: inserted.id ?? fallbackProject.id,
+            nom: inserted.nom_du_projet ?? fallbackProject.nom,
+            type: inserted.type_secteur ?? fallbackProject.type,
+            typeProjet: inserted.type_projet ?? fallbackProject.typeProjet,
+            partenaire: inserted.partenaire_client ?? fallbackProject.partenaire,
+            statut: inserted.statut ?? fallbackProject.statut,
+            objectif: inserted.objectif ?? fallbackProject.objectif,
+            action: inserted.prochaine_action ?? fallbackProject.action,
+            promptMarketing: inserted.prompt_marketing ?? fallbackProject.promptMarketing,
+            promptPartenaire: inserted.prompt_partenaire ?? fallbackProject.promptPartenaire,
+            promptVendeur: inserted.prompt_vendeur ?? fallbackProject.promptVendeur,
+            promptSpecialiste: inserted.prompt_specialiste ?? fallbackProject.promptSpecialiste,
+            priorite: inserted.priorite ?? fallbackProject.priorite,
+            created_at: inserted.created_at ?? fallbackProject.created_at,
+          }
+        : fallbackProject;
+
       setProjects((prev) => {
-        const updated = [projectToSave, ...prev];
+        const updated = [projectToStore, ...prev];
         saveProjects(updated);
         return updated;
       });
-      setSelectedType(projectToSave.typeProjet || 'Filiale');
-      closeCreateModal(projectToSave.typeProjet);
+
+      setSelectedType(projectToStore.typeProjet || 'Filiale');
+      closeCreateModal(projectToStore.typeProjet);
+      setFormStatus({
+        type: 'success',
+        message: 'Projet enregistré avec succès.',
+      });
     } catch (err) {
-      console.error('❌ Enregistrement local impossible :', err);
+      console.error('❌ Erreur insertion Supabase :', err);
       setFormStatus({
         type: 'error',
-        message: 'Impossible d’enregistrer le projet localement.',
+        message: "Impossible d'enregistrer le projet.",
       });
+      // Fallback local pour ne pas perdre la saisie
+      setProjects((prev) => {
+        const updated = [fallbackProject, ...prev];
+        saveProjects(updated);
+        return updated;
+      });
+      setSelectedType(fallbackProject.typeProjet || 'Filiale');
+      closeCreateModal(fallbackProject.typeProjet);
     } finally {
       setIsSaving(false);
     }
