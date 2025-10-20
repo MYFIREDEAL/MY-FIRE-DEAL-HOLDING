@@ -121,6 +121,14 @@ const saveProjects = (projects) => {
   }
 };
 
+const getProjectTypeLabel = (project) => {
+  const typeValue = (project?.type || '').trim();
+  if (typeValue) return typeValue;
+  const typeProjetValue = (project?.typeProjet || '').trim();
+  if (typeProjetValue) return typeProjetValue;
+  return 'Type non défini';
+};
+
 export default function MyFireDealApp() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   return isLoggedIn ? <Dashboard /> : <LoginPage onSuccess={() => setIsLoggedIn(true)} />;
@@ -331,7 +339,7 @@ function Dashboard() {
                         {project.nom || 'Sans titre'}
                       </h3>
                       <p className="text-sm text-slate-500">
-                        {project.type || 'Type non défini'}
+                        {getProjectTypeLabel(project)}
                       </p>
                     </div>
                     <span className="rounded-full bg-slate-900/5 px-3 py-1 text-xs font-semibold uppercase text-slate-600">
@@ -392,7 +400,7 @@ function Dashboard() {
                 <DetailRow label="Partenaire / Client" value={activeProject.partenaire} />
                 <DetailRow label="Objectif" value={activeProject.objectif} />
                 <DetailRow label="Prochaine action" value={activeProject.action} />
-                <DetailRow label="Type projet" value={activeProject.typeProjet} />
+                <DetailRow label="Type projet" value={getProjectTypeLabel(activeProject)} />
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
