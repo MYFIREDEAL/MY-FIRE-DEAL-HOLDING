@@ -1,9 +1,16 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { PlusCircle, X } from "lucide-react";
+import LoginPage from "./components/LoginPage";
+import { supabase } from './supabaseClient';
+
 // Menu Profil utilisateur (démonstration)
 function ProfileMenu() {
-  const [open, setOpen] = React.useState(false);
-  const [password, setPassword] = React.useState('password');
-  const [editMode, setEditMode] = React.useState(false);
-  const [newPassword, setNewPassword] = React.useState('');
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState('password');
+  const [editMode, setEditMode] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
   const email = 'jack.luc@icloud.com';
 
   const handleSave = () => {
@@ -62,11 +69,37 @@ function ProfileMenu() {
     </div>
   );
 }
-import React, { useState } from 'react';
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { PlusCircle, X } from "lucide-react";
-import LoginPage from "./components/LoginPage";
+
+const INITIAL_PROJECT = {
+  nom: '',
+  type: '',
+  typeProjet: 'Filiale',
+  partenaire: '',
+  statut: '',
+  objectif: '',
+  action: '',
+  promptMarketing: '',
+  promptPartenaire: '',
+  promptVendeur: '',
+  promptSpecialiste: '',
+  priorite: 'Moyenne',
+};
+
+const mapProjectRecord = (record) => ({
+  id: record?.id ?? null,
+  nom: record?.nom ?? '',
+  type: record?.type ?? '',
+  typeProjet: record?.type_projet ?? '',
+  partenaire: record?.partenaire ?? '',
+  statut: record?.statut ?? '',
+  objectif: record?.objectif ?? '',
+  action: record?.action ?? '',
+  promptMarketing: record?.prompt_marketing ?? '',
+  promptPartenaire: record?.prompt_partenaire ?? '',
+  promptVendeur: record?.prompt_vendeur ?? '',
+  promptSpecialiste: record?.prompt_specialiste ?? '',
+  priorite: record?.priorite ?? 'Moyenne',
+});
 
 
 export default function MyFireDealApp() {
@@ -80,41 +113,114 @@ function Dashboard() {
   const [selectedType, setSelectedType] = useState('Filiale');
   const [activeProjectId, setActiveProjectId] = useState(null);
   const [showProjectModal, setShowProjectModal] = useState(false);
-  const [newProject, setNewProject] = useState({
-    nom: '',
-    type: '',
-    typeProjet: 'Filiale',
-    partenaire: '',
-    statut: '',
-    objectif: '',
-    action: '',
-    promptMarketing: '',
-    promptPartenaire: '',
-    promptVendeur: '',
-    promptSpecialiste: '',
-    priorite: 'Moyenne'
-  });
+  const [newProject, setNewProject] = useState(() => ({ ...INITIAL_PROJECT }));
+  const [isSaving, setIsSaving] = useState(false);
+  const [formStatus, setFormStatus] = useState({ type: '', message: '' });
 
-  const handleAddProject = () => {
-    const projectWithId = { ...newProject, id: Date.now() };
-    setProjects([...projects, projectWithId]);
-    setSelectedType(projectWithId.typeProjet);
-    setShowModal(false);
-    setNewProject({
-      nom: '',
-      type: '',
-      typeProjet: 'Filiale',
-      partenaire: '',
-      statut: '',
-      objectif: '',
-      action: '',
-      promptMarketing: '',
-      promptPartenaire: '',
-      promptVendeur: '',
-      promptSpecialiste: '',
-      priorite: 'Moyenne'
-    });
+  const resetProjectForm = (typeProjet = selectedType) => {
+    setNewProject(() => ({ ...INITIAL_PROJECT, typeProjet }));
   };
+
+  const openCreateModal = () => {
+    setFormStatus({ type: '', message: '' });
+    resetProjectForm(selectedType);
+    setShowModal(true);
+  };
+
+  const closeCreateModal = (typeProjet = selectedType) => {
+    setShowModal(false);
+    setFormStatus({ type: '', message: '' });
+    resetProjectForm(typeProjet);
+  };
+
+  const fetchProjects = useCallback(async () => {
+    if (!supabase) {
+      console.warn('Impossible de charger les projets : client Supabase absent.');
+      return;
+    }
+    try {
+      const { data, error } = await supabase
+        .from('projets')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setProjects((data || []).map(mapProjectRecord));
+    } catch (err) {
+      console.error('❌ Chargement des projets impossible :', err.message);
+    }
+  }, [supabase]);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
+
+  const handleAddProject = async () => {
+    if (isSaving) return;
+    try {
+      if (!supabase) {
+        const message = 'Supabase n’est pas configuré. Vérifiez VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY.';
+        console.error(`❌ ${message}`);
+        setFormStatus({ type: 'error', message });
+        return;
+      }
+      setIsSaving(true);
+      setFormStatus({ type: '', message: '' });
+      // Récupère l'id du bloc selon le type du projet
+      const { data: blocs, error: blocError } = await supabase
+        .from('blocs')
+        .select('id, nom')
+
+      if (blocError) throw blocError
+
+      const bloc = (blocs || []).find(
+        (b) => b.nom === (newProject.typeProjet === 'Filiale' ? 'MY FIRE DEAL' : 'DEAL')
+      )
+
+      if (!bloc) {
+        throw new Error('Bloc non trouvé (ajoutez une entrée "MY FIRE DEAL" ou "DEAL" dans la table blocs).');
+      }
+
+      // Enregistre le projet
+      const { data: insertedProjects, error } = await supabase
+        .from('projets')
+        .insert([
+          {
+            bloc_id: bloc.id,
+            nom: newProject.nom,
+            type: newProject.type,
+            type_projet: newProject.typeProjet,
+            partenaire: newProject.partenaire,
+            statut: newProject.statut,
+            objectif: newProject.objectif,
+            priorite: newProject.priorite,
+            action: newProject.action,
+            prompt_marketing: newProject.promptMarketing,
+            prompt_partenaire: newProject.promptPartenaire,
+            prompt_vendeur: newProject.promptVendeur,
+            prompt_specialiste: newProject.promptSpecialiste,
+          },
+        ])
+        .select()
+
+      if (error) throw error
+
+      console.log('✅ Projet enregistré')
+      setFormStatus({ type: 'success', message: 'Projet enregistré avec succès.' });
+      if (insertedProjects?.length) {
+        setProjects((prev) => [mapProjectRecord(insertedProjects[0]), ...prev]);
+      } else {
+        fetchProjects();
+      }
+      setSelectedType(newProject.typeProjet || 'Filiale');
+      closeCreateModal(newProject.typeProjet);
+    } catch (err) {
+      console.error('❌ Erreur :', err.message)
+      setFormStatus({ type: 'error', message: err.message || 'Enregistrement impossible.' });
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   const renderField = (label, value, onChange, type = 'text') => (
     <label className="block text-sm font-medium text-gray-700">
@@ -146,7 +252,7 @@ function Dashboard() {
     <div className="min-h-screen bg-gradient-to-b from-slate-100 via-white to-slate-100 text-gray-900 p-8 relative">
       <div className="flex justify-end items-center gap-6 mb-8">
         <ProfileMenu />
-        <Button onClick={() => setShowModal(true)} className="flex items-center gap-2 bg-gradient-to-r from-green-700 via-emerald-700 to-teal-700 text-white hover:from-green-800 hover:via-emerald-800 hover:to-teal-800">
+        <Button onClick={openCreateModal} className="flex items-center gap-2 bg-gradient-to-r from-green-700 via-emerald-700 to-teal-700 text-white hover:from-green-800 hover:via-emerald-800 hover:to-teal-800">
           <PlusCircle className="h-5 w-5" /> Ajouter un projet
         </Button>
       </div>
@@ -327,7 +433,7 @@ function Dashboard() {
       {showModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white w-full max-w-6xl rounded-3xl shadow-xl p-8 relative">
-            <button className="absolute top-4 right-4 text-gray-500 hover:text-gray-700" onClick={() => setShowModal(false)}>
+            <button className="absolute top-4 right-4 text-gray-500 hover:text-gray-700" onClick={() => closeCreateModal(newProject.typeProjet)}>
               <X className="h-6 w-6" />
             </button>
             <h2 className="text-2xl font-semibold mb-6 text-gray-800">Créer un nouveau projet</h2>
@@ -355,6 +461,18 @@ function Dashboard() {
               {renderField('Prompt Spécialiste', newProject.promptSpecialiste, e => setNewProject({ ...newProject, promptSpecialiste: e.target.value }), 'textarea')}
             </div>
 
+            {formStatus.message && (
+              <div
+                className={`mb-6 rounded-xl border px-4 py-3 text-sm ${
+                  formStatus.type === 'success'
+                    ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-600'
+                    : 'border-rose-400/40 bg-rose-400/10 text-rose-600'
+                }`}
+              >
+                {formStatus.message}
+              </div>
+            )}
+
             <div className="flex justify-between items-center">
               <label className="block text-sm font-medium text-gray-700">
                 Priorité
@@ -366,8 +484,14 @@ function Dashboard() {
                 </select>
               </label>
               <div className="flex gap-4">
-                <Button variant='outline' onClick={() => setShowModal(false)} className='border-gray-300 text-gray-700 hover:bg-gray-100'>Annuler</Button>
-                <Button onClick={handleAddProject} className='bg-green-500 hover:bg-green-600 text-white'>Valider</Button>
+                <Button variant='outline' onClick={() => closeCreateModal(newProject.typeProjet)} className='border-gray-300 text-gray-700 hover:bg-gray-100'>Annuler</Button>
+                <Button
+                  onClick={handleAddProject}
+                  className='bg-green-500 hover:bg-green-600 text-white'
+                  disabled={isSaving}
+                >
+                  {isSaving ? 'Enregistrement...' : 'Valider'}
+                </Button>
               </div>
             </div>
           </div>
