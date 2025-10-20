@@ -143,6 +143,10 @@ function Dashboard() {
   const [newProject, setNewProject] = useState(() => ({ ...INITIAL_PROJECT }));
   const [isSaving, setIsSaving] = useState(false);
   const [formStatus, setFormStatus] = useState({ type: '', message: '' });
+  const [editedProject, setEditedProject] = useState(null);
+  const [isProjectEditing, setIsProjectEditing] = useState(false);
+  const [isProjectSaving, setIsProjectSaving] = useState(false);
+  const [projectModalStatus, setProjectModalStatus] = useState({ type: '', message: '' });
 
   useEffect(() => {
     setProjects(loadProjects());
@@ -221,15 +225,93 @@ function Dashboard() {
     (project) => project.typeProjet === selectedType
   );
   const activeProject = projects.find((project) => project.id === activeProjectId);
+  const displayedProject =
+    isProjectEditing && editedProject ? editedProject : activeProject;
 
   const openProjectModal = (project) => {
     setActiveProjectId(project.id);
+    setEditedProject({ ...project });
+    setProjectModalStatus({ type: '', message: '' });
+    setIsProjectEditing(false);
+    setIsProjectSaving(false);
     setShowProjectModal(true);
   };
 
   const closeProjectModal = () => {
     setShowProjectModal(false);
     setActiveProjectId(null);
+    setEditedProject(null);
+    setIsProjectEditing(false);
+    setIsProjectSaving(false);
+    setProjectModalStatus({ type: '', message: '' });
+  };
+
+  const startProjectEdit = () => {
+    if (!activeProject) return;
+    setEditedProject({ ...activeProject });
+    setIsProjectEditing(true);
+    setProjectModalStatus({ type: '', message: '' });
+  };
+
+  const cancelProjectEdit = () => {
+    if (activeProject) {
+      setEditedProject({ ...activeProject });
+    } else {
+      setEditedProject(null);
+    }
+    setIsProjectEditing(false);
+    setIsProjectSaving(false);
+    setProjectModalStatus({ type: '', message: '' });
+  };
+
+  const handleProjectFieldChange = (field, value) => {
+    setEditedProject((prev) => (prev ? { ...prev, [field]: value } : prev));
+    setProjectModalStatus({ type: '', message: '' });
+  };
+
+  const handleSaveProjectChanges = () => {
+    if (!editedProject) return;
+    setIsProjectSaving(true);
+    setProjectModalStatus({ type: '', message: '' });
+
+    let updatedRecord = null;
+
+    try {
+      setProjects((prev) => {
+        const updated = prev.map((project) => {
+          if (project.id !== editedProject.id) return project;
+          return {
+            ...project,
+            ...editedProject,
+          };
+        });
+        updatedRecord =
+          updated.find((project) => project.id === editedProject.id) ||
+          editedProject;
+        saveProjects(updated);
+        return updated;
+      });
+
+      const finalRecord = updatedRecord
+        ? { ...updatedRecord }
+        : { ...editedProject };
+
+      setEditedProject(finalRecord);
+      setSelectedType(finalRecord.typeProjet || 'Filiale');
+      setIsProjectEditing(false);
+      setProjectModalStatus({
+        type: 'success',
+        message: 'Projet mis à jour.',
+      });
+    } catch (err) {
+      console.error('❌ Mise à jour du projet impossible :', err);
+      setProjectModalStatus({
+        type: 'error',
+        message: 'Impossible de sauvegarder les modifications.',
+      });
+    } finally {
+      setIsProjectSaving(false);
+    }
   };
 
   return (
@@ -364,7 +446,7 @@ function Dashboard() {
         )}
       </section>
 
-      {showProjectModal && activeProject && (
+      {showProjectModal && displayedProject && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4 py-10">
           <div className="relative w-full max-w-4xl overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
             <button
@@ -377,38 +459,198 @@ function Dashboard() {
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
                   <span className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-500">
-                    {activeProject.typeProjet}
+                    {displayedProject.typeProjet || '—'}
                   </span>
                   <h3 className="mt-2 text-3xl font-bold text-slate-900">
-                    {activeProject.nom || 'Projet sans titre'}
+                    {displayedProject.nom || 'Projet sans titre'}
                   </h3>
                   <p className="text-sm text-slate-500">
-                    {activeProject.type || 'Type non défini'}
+                    {getProjectTypeLabel(displayedProject)}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold uppercase text-slate-600">
-                    Priorité&nbsp;: {activeProject.priorite}
+                    Priorité&nbsp;: {displayedProject.priorite || 'Moyenne'}
                   </span>
                   <span className="rounded-full bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-600">
-                    Statut&nbsp;: {activeProject.statut || 'En attente'}
+                    Statut&nbsp;: {displayedProject.statut || 'En attente'}
                   </span>
+                  {isProjectEditing ? (
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={cancelProjectEdit}
+                        className="border-slate-300 text-slate-600 hover:bg-slate-100"
+                        disabled={isProjectSaving}
+                      >
+                        Annuler
+                      </Button>
+                      <Button
+                        onClick={handleSaveProjectChanges}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                        disabled={isProjectSaving}
+                      >
+                        {isProjectSaving ? 'Enregistrement...' : 'Enregistrer'}
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      onClick={startProjectEdit}
+                      className="border-slate-300 text-slate-600 hover:bg-slate-100"
+                    >
+                      Modifier
+                    </Button>
+                  )}
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <DetailRow label="Partenaire / Client" value={activeProject.partenaire} />
-                <DetailRow label="Objectif" value={activeProject.objectif} />
-                <DetailRow label="Prochaine action" value={activeProject.action} />
-                <DetailRow label="Type projet" value={getProjectTypeLabel(activeProject)} />
-              </div>
+              {projectModalStatus.message && (
+                <div
+                  className={`rounded-xl border px-4 py-3 text-sm ${
+                    projectModalStatus.type === 'success'
+                      ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-600'
+                      : projectModalStatus.type === 'error'
+                        ? 'border-rose-400/40 bg-rose-400/10 text-rose-600'
+                        : 'border-slate-200 bg-slate-50 text-slate-600'
+                  }`}
+                >
+                  {projectModalStatus.message}
+                </div>
+              )}
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <PromptZone title="Prompt Marketing" text={activeProject.promptMarketing} />
-                <PromptZone title="Prompt Partenaire" text={activeProject.promptPartenaire} />
-                <PromptZone title="Prompt Vendeur" text={activeProject.promptVendeur} />
-                <PromptZone title="Prompt Spécialiste" text={activeProject.promptSpecialiste} />
-              </div>
+              {isProjectEditing ? (
+                <>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {renderField(
+                      'Nom du projet',
+                      editedProject?.nom || '',
+                      (e) => handleProjectFieldChange('nom', e.target.value),
+                    )}
+                    {renderField(
+                      'Type / Secteur',
+                      editedProject?.type || '',
+                      (e) => handleProjectFieldChange('type', e.target.value),
+                    )}
+                    <label className="block text-sm font-medium text-gray-700 md:col-span-2">
+                      Type de projet
+                      <select
+                        value={editedProject?.typeProjet || 'Filiale'}
+                        onChange={(e) =>
+                          handleProjectFieldChange('typeProjet', e.target.value)
+                        }
+                        className="border p-3 rounded-xl w-full mt-2"
+                      >
+                        <option>Filiale</option>
+                        <option>Deal</option>
+                      </select>
+                    </label>
+                    {renderField(
+                      'Partenaire / Client',
+                      editedProject?.partenaire || '',
+                      (e) => handleProjectFieldChange('partenaire', e.target.value),
+                    )}
+                    {renderField(
+                      'Statut',
+                      editedProject?.statut || '',
+                      (e) => handleProjectFieldChange('statut', e.target.value),
+                    )}
+                    {renderField(
+                      'Objectif',
+                      editedProject?.objectif || '',
+                      (e) => handleProjectFieldChange('objectif', e.target.value),
+                    )}
+                    {renderField(
+                      'Prochaine action',
+                      editedProject?.action || '',
+                      (e) => handleProjectFieldChange('action', e.target.value),
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    {renderField(
+                      'Prompt Marketing',
+                      editedProject?.promptMarketing || '',
+                      (e) =>
+                        handleProjectFieldChange('promptMarketing', e.target.value),
+                      'textarea',
+                    )}
+                    {renderField(
+                      'Prompt Partenaire',
+                      editedProject?.promptPartenaire || '',
+                      (e) =>
+                        handleProjectFieldChange('promptPartenaire', e.target.value),
+                      'textarea',
+                    )}
+                    {renderField(
+                      'Prompt Vendeur',
+                      editedProject?.promptVendeur || '',
+                      (e) =>
+                        handleProjectFieldChange('promptVendeur', e.target.value),
+                      'textarea',
+                    )}
+                    {renderField(
+                      'Prompt Spécialiste',
+                      editedProject?.promptSpecialiste || '',
+                      (e) =>
+                        handleProjectFieldChange('promptSpecialiste', e.target.value),
+                      'textarea',
+                    )}
+                  </div>
+
+                  <label className="block text-sm font-medium text-gray-700 w-full md:w-56">
+                    Priorité
+                    <select
+                      value={editedProject?.priorite || 'Moyenne'}
+                      onChange={(e) =>
+                        handleProjectFieldChange('priorite', e.target.value)
+                      }
+                      className="border p-3 rounded-xl w-full mt-2"
+                    >
+                      <option>Haute</option>
+                      <option>Moyenne</option>
+                      <option>Basse</option>
+                    </select>
+                  </label>
+                </>
+              ) : (
+                <>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <DetailRow
+                      label="Partenaire / Client"
+                      value={displayedProject.partenaire}
+                    />
+                    <DetailRow label="Objectif" value={displayedProject.objectif} />
+                    <DetailRow
+                      label="Prochaine action"
+                      value={displayedProject.action}
+                    />
+                    <DetailRow
+                      label="Type projet"
+                      value={getProjectTypeLabel(displayedProject)}
+                    />
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <PromptZone
+                      title="Prompt Marketing"
+                      text={displayedProject.promptMarketing}
+                    />
+                    <PromptZone
+                      title="Prompt Partenaire"
+                      text={displayedProject.promptPartenaire}
+                    />
+                    <PromptZone
+                      title="Prompt Vendeur"
+                      text={displayedProject.promptVendeur}
+                    />
+                    <PromptZone
+                      title="Prompt Spécialiste"
+                      text={displayedProject.promptSpecialiste}
+                    />
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
