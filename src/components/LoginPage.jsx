@@ -1,34 +1,43 @@
 
 import React, { useState } from "react";
 import { LogIn, Mail, Lock } from "lucide-react";
+import { supabase } from "../supabaseClient";
 
 export default function LoginPage({ onSuccess }) {
-  const DEMO_EMAIL = "jack.luc@icloud.com";
-  const DEMO_PASSWORD = "password";
-  const [email, setEmail] = useState(DEMO_EMAIL);
-  const [password, setPassword] = useState(DEMO_PASSWORD);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [status, setStatus] = useState({ type: "", message: "" });
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (email === DEMO_EMAIL && password === DEMO_PASSWORD) {
-      setStatus({
-        type: "success",
-        message: "Connexion réussie. Redirection vers votre espace...",
-      });
-      window.setTimeout(() => {
-        if (onSuccess) {
-          onSuccess();
-        }
-      }, 600);
-    } else {
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("email", email)
+      .eq("password", password)
+      .maybeSingle();
+
+    if (error || !data) {
+      console.error("Supabase login error:", error);
       setStatus({
         type: "error",
-        message:
-          "Identifiants invalides. Utilisez jack.luc@icloud.com / password.",
+        message: "❌ Mauvais identifiants",
       });
+      return;
     }
+
+    console.log("Supabase login success:", data);
+    setStatus({
+      type: "success",
+      message: "Connexion réussie. Redirection vers votre espace...",
+    });
+
+    window.setTimeout(() => {
+      if (onSuccess) {
+        onSuccess();
+      }
+    }, 600);
   };
 
   return (
@@ -103,10 +112,6 @@ export default function LoginPage({ onSuccess }) {
             <h2 className="mt-6 text-3xl font-semibold text-white">
               Se connecter
             </h2>
-
-            <p className="mt-4 text-sm text-white/60">
-              Identifiants de démonstration : {DEMO_EMAIL} / {DEMO_PASSWORD}
-            </p>
 
             {status.message && (
               <div

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { PlusCircle, X } from "lucide-react";
 import LoginPage from "./components/LoginPage";
 
@@ -227,6 +226,16 @@ function Dashboard() {
   const activeProject = projects.find((project) => project.id === activeProjectId);
   const displayedProject =
     isProjectEditing && editedProject ? editedProject : activeProject;
+  const projectTabs = [
+    { label: 'Filiales', value: 'Filiale' },
+    { label: 'Deals', value: 'Deal' },
+  ];
+  const promptGroups = [
+    { title: 'Prompt Marketing', key: 'promptMarketing' },
+    { title: 'Prompt Partenaire', key: 'promptPartenaire' },
+    { title: 'Prompt Vendeur', key: 'promptVendeur' },
+    { title: 'Prompt Spécialiste', key: 'promptSpecialiste' },
+  ];
 
   const openProjectModal = (project) => {
     setActiveProjectId(project.id);
@@ -315,136 +324,94 @@ function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-100 via-white to-slate-100 text-gray-900 p-8 relative">
-      <div className="flex justify-end items-center gap-6 mb-8">
-        <ProfileMenu />
-        <Button onClick={openCreateModal} className="flex items-center gap-2 bg-gradient-to-r from-green-700 via-emerald-700 to-teal-700 text-white hover:from-green-800 hover:via-emerald-800 hover:to-teal-800">
-          <PlusCircle className="h-5 w-5" /> Ajouter un projet
-        </Button>
-      </div>
-
-
-
-
-      <div className="mb-10 grid gap-6 md:grid-cols-2">
-          <Card
-            role="button"
-            tabIndex={0}
-            onClick={() => setSelectedType('Filiale')}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                setSelectedType('Filiale');
-              }
-          }}
-          className={`border-indigo-400/30 bg-gradient-to-br from-indigo-500/10 via-blue-500/10 to-cyan-400/10 shadow-xl shadow-indigo-900/10 transition ${
-            selectedType === 'Filiale'
-              ? 'ring-2 ring-indigo-400 ring-offset-2 ring-offset-white'
-              : 'cursor-pointer hover:-translate-y-1 hover:shadow-2xl'
-          }`}
-        >
-          <CardContent className="p-8">
-            <span className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-600">Holding</span>
-            <h2 className="mt-4 text-4xl font-black tracking-tight text-slate-900">MY FIRE DEAL</h2>
-            <p className="mt-4 text-base text-slate-600">
-              Pilotez vos filiales, vos assets stratégiques et vos indicateurs clés depuis un cockpit consolidé.
+    <div className="min-h-screen bg-slate-50 text-slate-900">
+      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-8 px-4 py-10">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-2">
+            <h1 className="text-2xl font-semibold text-slate-900">
+              Portefeuille projets
+            </h1>
+            <p className="text-sm text-slate-500">
+              Suivez vos filiales et deals actifs en un coup d&apos;œil.
             </p>
-          </CardContent>
-        </Card>
-          <Card
-            role="button"
-            tabIndex={0}
-            onClick={() => setSelectedType('Deal')}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                setSelectedType('Deal');
-              }
-          }}
-          className={`border-emerald-400/30 bg-gradient-to-br from-emerald-500/10 via-teal-500/10 to-sky-400/10 shadow-xl shadow-emerald-900/10 transition ${
-            selectedType === 'Deal'
-              ? 'ring-2 ring-emerald-400 ring-offset-2 ring-offset-white'
-              : 'cursor-pointer hover:-translate-y-1 hover:shadow-2xl'
-          }`}
-        >
-          <CardContent className="p-8">
-            <span className="text-xs font-semibold uppercase tracking-[0.35em] text-slate-600">Transaction</span>
-            <h2 className="mt-4 text-4xl font-black tracking-tight text-slate-900">DEAL</h2>
-            <p className="mt-4 text-base text-slate-600">
-              Cadrez, exécutez et sécurisez chaque deal avec des workflows intelligents et une collaboration fluide.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      <section className="space-y-4">
-        <div>
-          <h2 className="text-2xl font-semibold text-slate-900">
-            {selectedType === 'Filiale' ? 'Filiales actives' : 'Deals actifs'}
-          </h2>
-          <p className="text-sm text-slate-500">
-            {selectedType === 'Filiale'
-              ? 'Visualisez vos structures opérationnelles et leurs priorités.'
-              : 'Suivez vos opérations transactionnelles et leurs statuts.'}
-          </p>
+          </div>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+            <div className="flex items-center gap-1 rounded-full border border-slate-200 bg-white p-1">
+              {projectTabs.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setSelectedType(tab.value)}
+                  className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition ${
+                    selectedType === tab.value
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+            <Button
+              onClick={openCreateModal}
+              className="flex items-center gap-2 rounded-xl border border-blue-600 bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+            >
+              <PlusCircle className="h-4 w-4" />
+              Nouveau projet
+            </Button>
+            <ProfileMenu />
+          </div>
         </div>
 
-        {filteredProjects.length === 0 ? (
-          <Card className="border-dashed border-slate-300 bg-white/40 p-6 text-center text-slate-500">
-            <p className="text-sm">
-              Aucun projet {selectedType === 'Filiale' ? 'de type Filiale' : 'Deal'} pour le moment.
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-800">
+              {selectedType === 'Filiale' ? 'Filiales actives' : 'Deals actifs'}
+            </h2>
+            <p className="text-sm text-slate-500">
+              {selectedType === 'Filiale'
+                ? 'Vue d’ensemble de vos filiales, objectifs et priorités.'
+                : 'Suivi des deals en cours et de leur statut.'}
             </p>
-            <p className="text-sm">
-              Créez-en un via le bouton <span className="font-semibold">Ajouter un projet</span>.
-            </p>
-          </Card>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {filteredProjects.map((project) => (
-              <Card
-                key={project.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => openProjectModal(project)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
-                    openProjectModal(project);
-                  }
-                }}
-                className="cursor-pointer border-slate-200 bg-white/70 backdrop-blur transition hover:-translate-y-1 hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 focus-visible:ring-offset-2"
-              >
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <h3 className="text-lg font-semibold text-slate-900">
-                        {project.nom || 'Sans titre'}
-                      </h3>
-                      <p className="text-sm text-slate-500">
-                        {getProjectTypeLabel(project)}
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-slate-900/5 px-3 py-1 text-xs font-semibold uppercase text-slate-600">
-                      {project.priorite}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm text-slate-500">
-                    <span className="font-medium text-slate-600">
-                      {project.partenaire || 'Partenaire non défini'}
-                    </span>
-                    <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">
-                      {project.statut || 'Statut en attente'}
-                    </span>
-                  </div>
-                  <p className="text-sm text-slate-500 line-clamp-2">
-                    {project.objectif || 'Objectif à définir'}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
           </div>
-        )}
-      </section>
+
+          {filteredProjects.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-12 text-center text-sm text-slate-500">
+              <p>
+                Aucun projet {selectedType === 'Filiale' ? 'de type Filiale' : 'Deal'} pour le moment.
+              </p>
+              <p className="mt-2 font-medium text-slate-600">
+                Créez-en un via le bouton &laquo; Nouveau projet &raquo;.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredProjects.map((project) => {
+                const typeLabel = getProjectTypeLabel(project);
+                const prompts = promptGroups.map(({ title, key }) => ({
+                  title,
+                  text: project[key],
+                }));
+                const details = [
+                  { icon: '🤝', label: 'Partenaire', value: project.partenaire || 'À préciser' },
+                  { icon: '📌', label: 'Statut', value: project.statut || 'En attente' },
+                  { icon: '🎯', label: 'Objectif', value: project.objectif || 'À définir' },
+                  { icon: '⚡️', label: 'Action', value: project.action || 'À planifier' },
+                ];
+                return (
+                  <ProjectSummaryCard
+                    key={project.id}
+                    typeLabel={typeLabel}
+                    project={project}
+                    details={details}
+                    prompts={prompts}
+                    onEdit={() => openProjectModal(project)}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </section>
 
       {showProjectModal && displayedProject && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm px-4 py-10">
@@ -726,6 +693,7 @@ function Dashboard() {
         </div>
       )}
     </div>
+  </div>
   );
 }
 
@@ -737,6 +705,79 @@ function DetailRow({ label, value }) {
       </p>
       <p className="mt-2 text-sm text-slate-700">
         {value || '—'}
+      </p>
+    </div>
+  );
+}
+
+function ProjectSummaryCard({ project, typeLabel, details, prompts, onEdit }) {
+  return (
+    <div className="rounded-2xl border border-blue-100 bg-white/95 p-6 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <div className="flex flex-col gap-3 md:flex-row md:justify-between">
+        <div className="space-y-2">
+          <div className="text-xs font-semibold uppercase tracking-wide text-blue-500">
+            {typeLabel}
+          </div>
+          <h3 className="text-xl font-semibold text-blue-900">
+            {project.nom || 'Projet sans titre'}
+          </h3>
+          <p className="text-sm text-slate-600 whitespace-pre-wrap break-words">
+            {project.partenaire || 'Partenaire à préciser'}
+          </p>
+        </div>
+        <div className="flex flex-col items-start gap-2 md:items-end">
+          <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase text-blue-700">
+            Priorité&nbsp;: {project.priorite || 'Moyenne'}
+          </span>
+          <button
+            type="button"
+            onClick={onEdit}
+            className="inline-flex items-center rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-sm font-medium text-blue-600 transition hover:bg-blue-50"
+          >
+            Modifier
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {details.map(({ icon, label, value }) => (
+          <InfoChip key={label} icon={icon} label={label} value={value} />
+        ))}
+      </div>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {prompts.map(({ title, text }) => (
+          <PromptPreview key={title} title={title} text={text} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function InfoChip({ icon, label, value }) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <span className="mr-1" aria-hidden="true">
+          {icon}
+        </span>
+        {label}
+      </p>
+      <p className="mt-1 text-sm text-slate-700 whitespace-pre-wrap break-words">
+        {value || '—'}
+      </p>
+    </div>
+  );
+}
+
+function PromptPreview({ title, text }) {
+  return (
+    <div className="rounded-xl border border-blue-50 bg-blue-50/40 px-4 py-3">
+      <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">
+        {title}
+      </p>
+      <p className="mt-2 text-sm text-slate-700 whitespace-pre-wrap break-words">
+        {text || '—'}
       </p>
     </div>
   );
