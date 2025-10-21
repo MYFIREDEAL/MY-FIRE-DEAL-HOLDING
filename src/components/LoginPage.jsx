@@ -30,12 +30,18 @@ export default function LoginPage() {
     event.preventDefault();
     setStatus({ type: '', message: '' });
     setLoading(true);
+    const siteUrl =
+      import.meta.env.VITE_SITE_URL?.replace(/\/+$/, '') ||
+      window.location.origin;
 
     try {
       if (mode === 'signup') {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
+          options: {
+            emailRedirectTo: siteUrl,
+          },
         });
 
         if (error) {
