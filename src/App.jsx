@@ -4,24 +4,50 @@ import { PlusCircle, X } from "lucide-react";
 import LoginPage from "./components/LoginPage";
 import { supabase } from './supabaseClient';
 
-// Menu Profil utilisateur (démonstration)
-function ProfileMenu() {
+// Menu Profil utilisateur
+function ProfileMenu({ user }) {
   const [open, setOpen] = useState(false);
-  const [password, setPassword] = useState('password');
-  const [editMode, setEditMode] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const email = 'jack.luc@icloud.com';
+  const [fullName, setFullName] = useState('');
 
-  const handleSave = () => {
-    if (newPassword) {
-      setPassword(newPassword);
-      setNewPassword('');
-      setEditMode(false);
+  useEffect(() => {
+    if (!user) return;
+    let isMounted = true;
+
+    const loadProfile = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (!isMounted) return;
+
+        if (error) {
+          console.warn('Impossible de charger le profil :', error.message);
+          return;
+        }
+
+        if (data?.full_name) {
+          setFullName(data.full_name);
+        }
+      } catch (err) {
+        console.warn('Erreur profil :', err);
+      }
+    };
+
+    loadProfile();
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error('Déconnexion impossible :', err);
     }
-  };
-
-  const handleLogout = () => {
-    window.location.reload(); // démo : reload pour simuler déconnexion
   };
 
   return (
@@ -36,28 +62,12 @@ function ProfileMenu() {
       {open && (
         <div className="absolute right-0 mt-2 w-64 bg-white border border-slate-200 rounded-xl shadow-lg z-50 p-4 space-y-4">
           <div>
-            <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Email</div>
-            <div className="text-sm font-medium text-slate-800">{email}</div>
-          </div>
-          <div>
-            <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Mot de passe</div>
-            {editMode ? (
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={e => setNewPassword(e.target.value)}
-                  className="border rounded-lg px-2 py-1 text-sm flex-1"
-                  placeholder="Nouveau mot de passe"
-                />
-                <button onClick={handleSave} className="text-green-700 font-semibold text-xs">Enregistrer</button>
-                <button onClick={() => setEditMode(false)} className="text-slate-400 text-xs">Annuler</button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-slate-400">{password}</span>
-                <button onClick={() => setEditMode(true)} className="text-indigo-600 text-xs font-medium hover:underline">Modifier</button>
-              </div>
+            <div className="text-xs text-slate-500 font-semibold uppercase tracking-wider mb-1">Utilisateur</div>
+            <div className="text-sm font-medium text-slate-800">
+              {fullName || user?.email || 'Utilisateur'}
+            </div>
+            {fullName && (
+              <div className="text-xs text-slate-400">{user?.email}</div>
             )}
           </div>
           <div>
@@ -82,22 +92,32 @@ const INITIAL_PROJECT = {
   promptVendeur: '',
   promptSpecialiste: '',
   priorite: 'Moyenne',
+  isPublic: false,
 };
 
-const mapProjectToPayload = (project) => ({
-  nom_du_projet: project.nom || null,
-  type_projet: project.typeProjet || null,
-  type_secteur: project.type || null,
-  partenaire_client: project.partenaire || null,
-  statut: project.statut || null,
-  objectif: project.objectif || null,
-  prochaine_action: project.action || null,
-  prompt_marketing: project.promptMarketing || null,
-  prompt_partenaire: project.promptPartenaire || null,
-  prompt_vendeur: project.promptVendeur || null,
-  prompt_specialiste: project.promptSpecialiste || null,
-  priorite: project.priorite || null,
-});
+const mapProjectToPayload = (project, options = {}) => {
+  const payload = {
+    nom_du_projet: project.nom || null,
+    type_projet: project.typeProjet || null,
+    type_secteur: project.type || null,
+    partenaire_client: project.partenaire || null,
+    statut: project.statut || null,
+    objectif: project.objectif || null,
+    prochaine_action: project.action || null,
+    prompt_marketing: project.promptMarketing || null,
+    prompt_partenaire: project.promptPartenaire || null,
+    prompt_vendeur: project.promptVendeur || null,
+    prompt_specialiste: project.promptSpecialiste || null,
+    priorite: project.priorite || null,
+    is_public: Boolean(project.isPublic),
+  };
+
+  if (options.includeOwnerId) {
+    payload.owner_id = options.ownerId ?? null;
+  }
+
+  return payload;
+};
 
 const mapSupabaseRowToProject = (row) => ({
   id: row?.id ?? '',
@@ -113,6 +133,7 @@ const mapSupabaseRowToProject = (row) => ({
   promptVendeur: row?.prompt_vendeur ?? '',
   promptSpecialiste: row?.prompt_specialiste ?? '',
   priorite: row?.priorite ?? 'Moyenne',
+  isPublic: Boolean(row?.is_public),
   created_at: row?.created_at ?? new Date().toISOString(),
 });
 
@@ -125,11 +146,46 @@ const getProjectTypeLabel = (project) => {
 };
 
 export default function MyFireDealApp() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  return isLoggedIn ? <Dashboard /> : <LoginPage onSuccess={() => setIsLoggedIn(true)} />;
+  const [session, setSession] = useState(null);
+  const [initializing, setInitializing] = useState(true);
+
+  useEffect(() => {
+    const init = async () => {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error('Impossible de récupérer la session Supabase :', error);
+      }
+      setSession(data?.session ?? null);
+      setInitializing(false);
+    };
+
+    init();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+      setInitializing(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  if (initializing) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-500">
+        Chargement...
+      </div>
+    );
+  }
+
+  return session ? <Dashboard session={session} /> : <LoginPage />;
 }
 
-function Dashboard() {
+function Dashboard({ session }) {
+  const user = session?.user;
   const [projects, setProjects] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [selectedType, setSelectedType] = useState('Filiale');
@@ -144,8 +200,7 @@ function Dashboard() {
   const [projectModalStatus, setProjectModalStatus] = useState({ type: '', message: '' });
 
   const fetchProjects = useCallback(async () => {
-    if (!supabase) {
-      console.warn('Supabase non configuré, aucun projet chargé.');
+    if (!supabase || !user) {
       setProjects([]);
       return;
     }
@@ -164,7 +219,7 @@ function Dashboard() {
     } catch (err) {
       console.error('❌ Chargement des projets impossible :', err);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     fetchProjects();
@@ -189,10 +244,10 @@ function Dashboard() {
   const handleAddProject = async (event) => {
     event?.preventDefault?.();
     if (isSaving) return;
-    if (!supabase) {
+    if (!supabase || !user) {
       setFormStatus({
         type: 'error',
-        message: 'Supabase non configuré. Impossible de créer le projet.',
+        message: 'Impossible de créer le projet pour le moment.',
       });
       return;
     }
@@ -203,7 +258,12 @@ function Dashboard() {
     try {
       const { data, error } = await supabase
         .from('projects')
-        .insert([mapProjectToPayload(newProject)])
+        .insert([
+          mapProjectToPayload(newProject, {
+            includeOwnerId: true,
+            ownerId: user.id,
+          }),
+        ])
         .select()
         .maybeSingle();
 
@@ -307,10 +367,10 @@ function Dashboard() {
 
   const handleSaveProjectChanges = async () => {
     if (!editedProject) return;
-    if (!supabase) {
+    if (!supabase || !user) {
       setProjectModalStatus({
         type: 'error',
-        message: 'Supabase non configuré. Impossible de mettre à jour le projet.',
+        message: 'Impossible de mettre à jour le projet pour le moment.',
       });
       return;
     }
@@ -330,18 +390,19 @@ function Dashboard() {
         throw error;
       }
 
-      const updatedProject = data
-        ? mapSupabaseRowToProject(data)
-        : { ...editedProject };
+      if (data) {
+        const updatedProject = mapSupabaseRowToProject(data);
+        setProjects((prev) =>
+          prev.map((project) =>
+            project.id === updatedProject.id ? updatedProject : project,
+          ),
+        );
+        setEditedProject(updatedProject);
+        setSelectedType(updatedProject.typeProjet || 'Filiale');
+      } else {
+        await fetchProjects();
+      }
 
-      setProjects((prev) =>
-        prev.map((project) =>
-          project.id === updatedProject.id ? updatedProject : project,
-        ),
-      );
-
-      setEditedProject(updatedProject);
-      setSelectedType(updatedProject.typeProjet || 'Filiale');
       setIsProjectEditing(false);
       setProjectModalStatus({
         type: 'success',
@@ -395,7 +456,7 @@ function Dashboard() {
               <PlusCircle className="h-4 w-4" />
               Nouveau projet
             </Button>
-            <ProfileMenu />
+            <ProfileMenu user={user} />
           </div>
         </div>
 
@@ -433,6 +494,7 @@ function Dashboard() {
                   { icon: '📌', label: 'Statut', value: project.statut || 'En attente' },
                   { icon: '🎯', label: 'Objectif', value: project.objectif || 'À définir' },
                   { icon: '⚡️', label: 'Action', value: project.action || 'À planifier' },
+                  { icon: project.isPublic ? '🌐' : '🔒', label: 'Visibilité', value: project.isPublic ? 'Projet public' : 'Projet privé' },
                 ];
                 return (
                   <ProjectSummaryCard
@@ -615,6 +677,17 @@ function Dashboard() {
                       <option>Basse</option>
                     </select>
                   </label>
+                  <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(editedProject?.isPublic)}
+                      onChange={(e) =>
+                        handleProjectFieldChange('isPublic', e.target.checked)
+                      }
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-600"
+                    />
+                    Projet public
+                  </label>
                 </>
               ) : (
                 <>
@@ -631,6 +704,10 @@ function Dashboard() {
                     <DetailRow
                       label="Type projet"
                       value={getProjectTypeLabel(displayedProject)}
+                    />
+                    <DetailRow
+                      label="Visibilité"
+                      value={displayedProject.isPublic ? 'Projet public' : 'Projet privé'}
                     />
                   </div>
 
@@ -705,15 +782,25 @@ function Dashboard() {
             )}
 
             <div className="flex justify-between items-center">
-              <label className="block text-sm font-medium text-gray-700">
-                Priorité
-
-                <select value={newProject.priorite} onChange={e => setNewProject({ ...newProject, priorite: e.target.value })} className="border p-3 rounded-xl w-40 mt-2">
-                  <option>Haute</option>
-                  <option>Moyenne</option>
-                  <option>Basse</option>
-                </select>
-              </label>
+              <div className="flex flex-col gap-2 text-sm text-gray-700">
+                <label className="block font-medium">
+                  Priorité
+                  <select value={newProject.priorite} onChange={e => setNewProject({ ...newProject, priorite: e.target.value })} className="border p-3 rounded-xl w-40 mt-2">
+                    <option>Haute</option>
+                    <option>Moyenne</option>
+                    <option>Basse</option>
+                  </select>
+                </label>
+                <label className="inline-flex items-center gap-2 font-medium">
+                  <input
+                    type="checkbox"
+                    checked={newProject.isPublic}
+                    onChange={e => setNewProject({ ...newProject, isPublic: e.target.checked })}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-600"
+                  />
+                  Projet public
+                </label>
+              </div>
               <div className="flex gap-4">
                 <Button variant='outline' onClick={() => closeCreateModal(newProject.typeProjet)} className='border-gray-300 text-gray-700 hover:bg-gray-100'>Annuler</Button>
                 <Button
@@ -765,6 +852,15 @@ function ProjectSummaryCard({ project, typeLabel, details, prompts, onEdit }) {
           <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold uppercase text-blue-700">
             Priorité&nbsp;: {project.priorite || 'Moyenne'}
           </span>
+          {project.isPublic ? (
+            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase text-emerald-700">
+              Public
+            </span>
+          ) : (
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold uppercase text-slate-500">
+              Privé
+            </span>
+          )}
           <button
             type="button"
             onClick={onEdit}

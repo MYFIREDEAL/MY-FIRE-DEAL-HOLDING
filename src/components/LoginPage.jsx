@@ -1,43 +1,102 @@
 
 import React, { useState } from "react";
-import { LogIn, Mail, Lock } from "lucide-react";
+import { LogIn, Mail, Lock, UserPlus } from "lucide-react";
 import { supabase } from "../supabaseClient";
 
-export default function LoginPage({ onSuccess }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [status, setStatus] = useState({ type: "", message: "" });
+const MODES = {
+  signin: {
+    title: 'Se connecter',
+    actionLabel: 'Connexion',
+    switchLabel: "Pas encore de compte ?",
+    switchAction: 'Créer un compte',
+  },
+  signup: {
+    title: 'Créer un compte',
+    actionLabel: 'Créer le compte',
+    switchLabel: 'Déjà inscrit ?',
+    switchAction: 'Se connecter',
+  },
+};
+
+export default function LoginPage() {
+  const [mode, setMode] = useState('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [status, setStatus] = useState({ type: '', message: '' });
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    setStatus({ type: '', message: '' });
+    setLoading(true);
 
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("email", email)
-      .eq("password", password)
-      .maybeSingle();
+    try {
+      if (mode === 'signup') {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+        });
 
-    if (error || !data) {
-      console.error("Supabase login error:", error);
-      setStatus({
-        type: "error",
-        message: "❌ Mauvais identifiants",
-      });
-      return;
-    }
+        if (error) {
+          throw error;
+        }
 
-    console.log("Supabase login success:", data);
-    setStatus({
-      type: "success",
-      message: "Connexion réussie. Redirection vers votre espace...",
-    });
+        const user = data?.user;
 
-    window.setTimeout(() => {
-      if (onSuccess) {
-        onSuccess();
+        if (user) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .upsert(
+              [
+                {
+                  id: user.id,
+                  full_name: fullName || null,
+                },
+              ],
+              { onConflict: 'id' },
+            );
+
+          if (profileError) {
+            throw profileError;
+          }
+        }
+
+        setStatus({
+          type: 'success',
+          message:
+            'Compte créé. Vérifiez vos e-mails si une confirmation est requise, puis connectez-vous.',
+        });
+        setMode('signin');
+        setFullName('');
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        setStatus({
+          type: 'success',
+          message: 'Connexion réussie.',
+        });
+
+        if (data?.user) {
+          console.log('✅ Authentifié :', data.user.id);
+        }
       }
-    }, 600);
+    } catch (err) {
+      console.error('Auth error:', err);
+      setStatus({
+        type: 'error',
+        message: err?.message || "Une erreur s'est produite.",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -102,15 +161,19 @@ export default function LoginPage({ onSuccess }) {
           <div className="h-full w-full max-w-md rounded-3xl border border-white/10 bg-slate-900/70 p-8 shadow-2xl shadow-indigo-900/40 backdrop-blur">
             <div className="flex items-center gap-3 text-indigo-200">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo-500/20">
-                <LogIn className="h-5 w-5" />
+                {mode === 'signup' ? (
+                  <UserPlus className="h-5 w-5" />
+                ) : (
+                  <LogIn className="h-5 w-5" />
+                )}
               </div>
               <span className="text-sm font-medium uppercase tracking-widest text-white/70">
-                Connexion sécurisée
+                {mode === 'signup' ? 'Création de compte' : 'Connexion sécurisée'}
               </span>
             </div>
 
             <h2 className="mt-6 text-3xl font-semibold text-white">
-              Se connecter
+              {MODES[mode].title}
             </h2>
 
             {status.message && (
@@ -127,6 +190,22 @@ export default function LoginPage({ onSuccess }) {
 
             <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
               <div className="space-y-4">
+                {mode === 'signup' && (
+                  <label className="block text-sm font-medium text-white/70">
+                    Nom complet
+                    <div className="mt-2 flex items-center rounded-2xl border border-white/10 bg-slate-900/80 px-4">
+                      <input
+                        type="text"
+                        name="full_name"
+                        placeholder="Votre nom"
+                        value={fullName}
+                        onChange={(event) => setFullName(event.target.value)}
+                        className="w-full bg-transparent px-3 py-3 text-white placeholder:text-white/40 focus:outline-none"
+                        autoComplete="name"
+                      />
+                    </div>
+                  </label>
+                )}
                 <label className="block text-sm font-medium text-white/70">
                   Adresse e-mail
                   <div className="mt-2 flex items-center rounded-2xl border border-white/10 bg-slate-900/80 px-4">
@@ -160,38 +239,37 @@ export default function LoginPage({ onSuccess }) {
                 </label>
               </div>
 
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 text-sm text-white/70">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 rounded border-white/20 bg-slate-900/50 text-indigo-400 focus:ring-indigo-500"
-                  />
-                  Se souvenir de moi
-                </label>
-                <button
-                  type="button"
-                  className="text-sm font-medium text-indigo-200 hover:text-indigo-100"
-                >
-                  Mot de passe oublié ?
-                </button>
-              </div>
-
               <button
                 type="submit"
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:shadow-indigo-900/70"
+                disabled={loading}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-400 px-4 py-3 text-base font-semibold text-white shadow-lg shadow-indigo-900/40 transition hover:shadow-indigo-900/70 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <LogIn className="h-5 w-5" />
-                Connexion
+                {mode === 'signup' ? (
+                  <UserPlus className="h-5 w-5" />
+                ) : (
+                  <LogIn className="h-5 w-5" />
+                )}
+                {loading ? 'Patientez...' : MODES[mode].actionLabel}
               </button>
 
               <p className="text-center text-sm text-white/60">
-                Besoin d&apos;un accès ?{" "}
-                <a
-                  href="#contact"
-                  className="font-medium text-indigo-200 hover:text-indigo-100"
+                {MODES[mode].switchLabel}{' '}
+                <button
+                  type="button"
+                  className="font-medium text-indigo-200 hover:text-indigo-100 underline"
+                  onClick={() => {
+                    setStatus({ type: '', message: '' });
+                    setMode((prevMode) => {
+                      const nextMode = prevMode === 'signin' ? 'signup' : 'signin';
+                      if (nextMode === 'signin') {
+                        setFullName('');
+                      }
+                      return nextMode;
+                    });
+                  }}
                 >
-                  Contactez l&apos;équipe MY COPILOT IA
-                </a>
+                  {MODES[mode].switchAction}
+                </button>
               </p>
             </form>
           </div>
