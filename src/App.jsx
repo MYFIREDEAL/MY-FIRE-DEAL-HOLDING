@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { PlusCircle, X } from "lucide-react";
 import LoginPage from "./components/LoginPage";
@@ -84,42 +84,37 @@ const INITIAL_PROJECT = {
   priorite: 'Moyenne',
 };
 
-const LOCAL_PROJECTS_KEY = 'myfiredeal.projects';
+const mapProjectToPayload = (project) => ({
+  nom_du_projet: project.nom || null,
+  type_projet: project.typeProjet || null,
+  type_secteur: project.type || null,
+  partenaire_client: project.partenaire || null,
+  statut: project.statut || null,
+  objectif: project.objectif || null,
+  prochaine_action: project.action || null,
+  prompt_marketing: project.promptMarketing || null,
+  prompt_partenaire: project.promptPartenaire || null,
+  prompt_vendeur: project.promptVendeur || null,
+  prompt_specialiste: project.promptSpecialiste || null,
+  priorite: project.priorite || null,
+});
 
-const generateProjectId = () => {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-};
-
-const loadProjects = () => {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(LOCAL_PROJECTS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map((project) => ({
-      ...INITIAL_PROJECT,
-      ...project,
-      id: project.id ?? generateProjectId(),
-    }));
-  } catch (err) {
-    console.warn('Impossible de charger les projets locaux :', err);
-    return [];
-  }
-};
-
-const saveProjects = (projects) => {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(LOCAL_PROJECTS_KEY, JSON.stringify(projects));
-  } catch (err) {
-    console.warn('Impossible de sauvegarder les projets locaux :', err);
-    throw err;
-  }
-};
+const mapSupabaseRowToProject = (row) => ({
+  id: row?.id ?? '',
+  nom: row?.nom_du_projet ?? '',
+  type: row?.type_secteur ?? '',
+  typeProjet: row?.type_projet ?? 'Filiale',
+  partenaire: row?.partenaire_client ?? '',
+  statut: row?.statut ?? '',
+  objectif: row?.objectif ?? '',
+  action: row?.prochaine_action ?? '',
+  promptMarketing: row?.prompt_marketing ?? '',
+  promptPartenaire: row?.prompt_partenaire ?? '',
+  promptVendeur: row?.prompt_vendeur ?? '',
+  promptSpecialiste: row?.prompt_specialiste ?? '',
+  priorite: row?.priorite ?? 'Moyenne',
+  created_at: row?.created_at ?? new Date().toISOString(),
+});
 
 const getProjectTypeLabel = (project) => {
   const typeValue = (project?.type || '').trim();
@@ -148,9 +143,32 @@ function Dashboard() {
   const [isProjectSaving, setIsProjectSaving] = useState(false);
   const [projectModalStatus, setProjectModalStatus] = useState({ type: '', message: '' });
 
-  useEffect(() => {
-    setProjects(loadProjects());
+  const fetchProjects = useCallback(async () => {
+    if (!supabase) {
+      console.warn('Supabase non configuré, aucun projet chargé.');
+      setProjects([]);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      setProjects((data || []).map(mapSupabaseRowToProject));
+    } catch (err) {
+      console.error('❌ Chargement des projets impossible :', err);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchProjects();
+  }, [fetchProjects]);
 
   const resetProjectForm = (typeProjet = selectedType) => {
     setNewProject(() => ({ ...INITIAL_PROJECT, typeProjet }));
@@ -171,63 +189,48 @@ function Dashboard() {
   const handleAddProject = async (event) => {
     event?.preventDefault?.();
     if (isSaving) return;
+    if (!supabase) {
+      setFormStatus({
+        type: 'error',
+        message: 'Supabase non configuré. Impossible de créer le projet.',
+      });
+      return;
+    }
 
     setIsSaving(true);
     setFormStatus({ type: '', message: '' });
 
-    const payload = mapProjectToPayload(newProject);
-    const fallbackProject = mapSupabaseRowToProject(null, newProject);
-
     try {
-      let inserted = null;
+      const { data, error } = await supabase
+        .from('projects')
+        .insert([mapProjectToPayload(newProject)])
+        .select()
+        .maybeSingle();
 
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('projects')
-          .insert([payload])
-          .select()
-          .maybeSingle();
-
-        if (error) {
-          throw error;
-        }
-
-        inserted = data;
-        console.log('✅ Projet ajouté :', data);
-        alert('Projet créé avec succès !');
-      } else {
-        console.warn('Supabase non configuré, enregistrement local uniquement.');
+      if (error) {
+        throw error;
       }
 
-      const projectToStore = inserted
-        ? mapSupabaseRowToProject(inserted, fallbackProject)
-        : fallbackProject;
+      if (data) {
+        const projectToStore = mapSupabaseRowToProject(data);
+        setProjects((prev) => [projectToStore, ...prev.filter((project) => project.id !== projectToStore.id)]);
+        setSelectedType(projectToStore.typeProjet || 'Filiale');
+      } else {
+        await fetchProjects();
+      }
 
-      setProjects((prev) => {
-        const updated = [projectToStore, ...prev];
-        saveProjects(updated);
-        return updated;
-      });
-
-      setSelectedType(projectToStore.typeProjet || 'Filiale');
-      closeCreateModal(projectToStore.typeProjet);
+      closeCreateModal(newProject.typeProjet);
       setFormStatus({
         type: 'success',
         message: 'Projet enregistré avec succès.',
       });
+      console.log('✅ Projet ajouté dans Supabase');
     } catch (err) {
       console.error('❌ Erreur insertion Supabase :', err);
       setFormStatus({
         type: 'error',
         message: "Impossible d'enregistrer le projet.",
       });
-      // Fallback local pour ne pas perdre la saisie
-      setProjects((prev) => {
-        const updated = [fallbackProject, ...prev];
-        saveProjects(updated);
-        return updated;
-      });
-      setSelectedType(fallbackProject.typeProjet || 'Filiale');
     } finally {
       setIsSaving(false);
     }
@@ -260,38 +263,6 @@ function Dashboard() {
     { title: 'Prompt Vendeur', key: 'promptVendeur' },
     { title: 'Prompt Spécialiste', key: 'promptSpecialiste' },
   ];
-
-  const mapProjectToPayload = (project) => ({
-    nom_du_projet: project.nom || null,
-    type_projet: project.typeProjet || null,
-    type_secteur: project.type || null,
-    partenaire_client: project.partenaire || null,
-    statut: project.statut || null,
-    objectif: project.objectif || null,
-    prochaine_action: project.action || null,
-    prompt_marketing: project.promptMarketing || null,
-    prompt_partenaire: project.promptPartenaire || null,
-    prompt_vendeur: project.promptVendeur || null,
-    prompt_specialiste: project.promptSpecialiste || null,
-    priorite: project.priorite || null,
-  });
-
-  const mapSupabaseRowToProject = (row, fallback = {}) => ({
-    id: row?.id ?? fallback.id ?? generateProjectId(),
-    nom: row?.nom_du_projet ?? fallback.nom ?? '',
-    type: row?.type_secteur ?? fallback.type ?? '',
-    typeProjet: row?.type_projet ?? fallback.typeProjet ?? 'Filiale',
-    partenaire: row?.partenaire_client ?? fallback.partenaire ?? '',
-    statut: row?.statut ?? fallback.statut ?? '',
-    objectif: row?.objectif ?? fallback.objectif ?? '',
-    action: row?.prochaine_action ?? fallback.action ?? '',
-    promptMarketing: row?.prompt_marketing ?? fallback.promptMarketing ?? '',
-    promptPartenaire: row?.prompt_partenaire ?? fallback.promptPartenaire ?? '',
-    promptVendeur: row?.prompt_vendeur ?? fallback.promptVendeur ?? '',
-    promptSpecialiste: row?.prompt_specialiste ?? fallback.promptSpecialiste ?? '',
-    priorite: row?.priorite ?? fallback.priorite ?? 'Moyenne',
-    created_at: row?.created_at ?? fallback.created_at ?? new Date().toISOString(),
-  });
 
   const openProjectModal = (project) => {
     setActiveProjectId(project.id);
@@ -336,73 +307,52 @@ function Dashboard() {
 
   const handleSaveProjectChanges = async () => {
     if (!editedProject) return;
+    if (!supabase) {
+      setProjectModalStatus({
+        type: 'error',
+        message: 'Supabase non configuré. Impossible de mettre à jour le projet.',
+      });
+      return;
+    }
+
     setIsProjectSaving(true);
     setProjectModalStatus({ type: '', message: '' });
 
-    let updatedRecord = null;
-
     try {
-      let supabaseRow = null;
+      const { data, error } = await supabase
+        .from('projects')
+        .update(mapProjectToPayload(editedProject))
+        .eq('id', editedProject.id)
+        .select()
+        .maybeSingle();
 
-      if (supabase && editedProject.id) {
-        const payload = mapProjectToPayload(editedProject);
-        const { data, error } = await supabase
-          .from('projects')
-          .update(payload)
-          .eq('id', editedProject.id)
-          .select()
-          .maybeSingle();
-
-        if (error) {
-          throw error;
-        }
-
-        supabaseRow = data;
-        console.log('✅ Projet mis à jour :', data);
-      } else if (!supabase) {
-        console.warn('Supabase non configuré, mise à jour uniquement côté client.');
+      if (error) {
+        throw error;
       }
 
-      const projectToPersist = supabaseRow
-        ? mapSupabaseRowToProject(supabaseRow, editedProject)
+      const updatedProject = data
+        ? mapSupabaseRowToProject(data)
         : { ...editedProject };
 
-      setProjects((prev) => {
-        const updated = prev.map((project) => {
-          if (project.id !== projectToPersist.id) return project;
-          return projectToPersist;
-        });
-        updatedRecord =
-          updated.find((project) => project.id === projectToPersist.id) ||
-          projectToPersist;
-        saveProjects(updated);
-        return updated;
-      });
+      setProjects((prev) =>
+        prev.map((project) =>
+          project.id === updatedProject.id ? updatedProject : project,
+        ),
+      );
 
-      const finalRecord = updatedRecord
-        ? { ...updatedRecord }
-        : { ...editedProject };
-
-      setEditedProject(finalRecord);
-      setSelectedType(finalRecord.typeProjet || 'Filiale');
+      setEditedProject(updatedProject);
+      setSelectedType(updatedProject.typeProjet || 'Filiale');
       setIsProjectEditing(false);
       setProjectModalStatus({
         type: 'success',
         message: 'Projet mis à jour.',
       });
+      console.log('✅ Projet mis à jour dans Supabase');
     } catch (err) {
       console.error('❌ Mise à jour du projet impossible :', err);
       setProjectModalStatus({
         type: 'error',
         message: 'Impossible de sauvegarder les modifications.',
-      });
-      setProjects((prev) => {
-        const updated = prev.map((project) => {
-          if (project.id !== editedProject.id) return project;
-          return { ...project, ...editedProject };
-        });
-        saveProjects(updated);
-        return updated;
       });
     } finally {
       setIsProjectSaving(false);
