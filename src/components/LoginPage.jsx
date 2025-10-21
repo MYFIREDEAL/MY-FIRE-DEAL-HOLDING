@@ -30,13 +30,14 @@ export default function LoginPage() {
     event.preventDefault();
     setStatus({ type: '', message: '' });
     setLoading(true);
+    const baseUrl = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
+    const defaultSiteUrl = `${window.location.origin}${baseUrl ? `${baseUrl}` : ''}`.replace(/\/+$/, '');
     const siteUrl =
-      import.meta.env.VITE_SITE_URL?.replace(/\/+$/, '') ||
-      window.location.origin;
+      import.meta.env.VITE_SITE_URL?.replace(/\/+$/, '') || defaultSiteUrl;
 
     try {
       if (mode === 'signup') {
-        const { data, error } = await supabase.auth.signUp({
+        const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -46,26 +47,6 @@ export default function LoginPage() {
 
         if (error) {
           throw error;
-        }
-
-        const user = data?.user;
-
-        if (user) {
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .upsert(
-              [
-                {
-                  id: user.id,
-                  full_name: fullName || null,
-                },
-              ],
-              { onConflict: 'id' },
-            );
-
-          if (profileError) {
-            throw profileError;
-          }
         }
 
         setStatus({

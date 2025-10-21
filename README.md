@@ -5,7 +5,7 @@
 - Le client utilise **Supabase Auth** (`supabase.auth.signUp` / `signInWithPassword`).  
 - Lorsqu'un utilisateur est créé, on insère un profil dans `public.profiles` via un simple `upsert`.  
 - Les projets (`public.projects`) sont protégés par RLS et liés à `auth.users(id)` via `owner_id`.
-- Définissez `VITE_SITE_URL` (ex. `http://localhost:3000` en dev, `https://myfiredeal.github.io/MY-FIRE-DEAL-HOLDING/` en prod) pour que les redirections Supabase Auth fonctionnent sans URL codée en dur.
+- Définissez `VITE_SITE_URL` (ex. `http://localhost:3000` en dev, `https://myfiredeal.github.io/MY-FIRE-DEAL-HOLDING` en prod) pour que les redirections Supabase Auth fonctionnent sans URL codée en dur.
 
 ### Clés Supabase
 
