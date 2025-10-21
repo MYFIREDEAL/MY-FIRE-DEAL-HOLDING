@@ -175,37 +175,8 @@ function Dashboard() {
     setIsSaving(true);
     setFormStatus({ type: '', message: '' });
 
-    const payload = {
-      nom_du_projet: newProject.nom || null,
-      type_projet: newProject.typeProjet || null,
-      type_secteur: newProject.type || null,
-      partenaire_client: newProject.partenaire || null,
-      statut: newProject.statut || null,
-      objectif: newProject.objectif || null,
-      prochaine_action: newProject.action || null,
-      prompt_marketing: newProject.promptMarketing || null,
-      prompt_partenaire: newProject.promptPartenaire || null,
-      prompt_vendeur: newProject.promptVendeur || null,
-      prompt_specialiste: newProject.promptSpecialiste || null,
-      priorite: newProject.priorite || null,
-    };
-
-    const fallbackProject = {
-      id: generateProjectId(),
-      nom: newProject.nom,
-      type: newProject.type,
-      typeProjet: newProject.typeProjet,
-      partenaire: newProject.partenaire,
-      statut: newProject.statut,
-      objectif: newProject.objectif,
-      action: newProject.action,
-      promptMarketing: newProject.promptMarketing,
-      promptPartenaire: newProject.promptPartenaire,
-      promptVendeur: newProject.promptVendeur,
-      promptSpecialiste: newProject.promptSpecialiste,
-      priorite: newProject.priorite,
-      created_at: new Date().toISOString(),
-    };
+    const payload = mapProjectToPayload(newProject);
+    const fallbackProject = mapSupabaseRowToProject(null, newProject);
 
     try {
       let inserted = null;
@@ -229,22 +200,7 @@ function Dashboard() {
       }
 
       const projectToStore = inserted
-        ? {
-            id: inserted.id ?? fallbackProject.id,
-            nom: inserted.nom_du_projet ?? fallbackProject.nom,
-            type: inserted.type_secteur ?? fallbackProject.type,
-            typeProjet: inserted.type_projet ?? fallbackProject.typeProjet,
-            partenaire: inserted.partenaire_client ?? fallbackProject.partenaire,
-            statut: inserted.statut ?? fallbackProject.statut,
-            objectif: inserted.objectif ?? fallbackProject.objectif,
-            action: inserted.prochaine_action ?? fallbackProject.action,
-            promptMarketing: inserted.prompt_marketing ?? fallbackProject.promptMarketing,
-            promptPartenaire: inserted.prompt_partenaire ?? fallbackProject.promptPartenaire,
-            promptVendeur: inserted.prompt_vendeur ?? fallbackProject.promptVendeur,
-            promptSpecialiste: inserted.prompt_specialiste ?? fallbackProject.promptSpecialiste,
-            priorite: inserted.priorite ?? fallbackProject.priorite,
-            created_at: inserted.created_at ?? fallbackProject.created_at,
-          }
+        ? mapSupabaseRowToProject(inserted, fallbackProject)
         : fallbackProject;
 
       setProjects((prev) => {
@@ -272,7 +228,6 @@ function Dashboard() {
         return updated;
       });
       setSelectedType(fallbackProject.typeProjet || 'Filiale');
-      closeCreateModal(fallbackProject.typeProjet);
     } finally {
       setIsSaving(false);
     }
@@ -305,6 +260,38 @@ function Dashboard() {
     { title: 'Prompt Vendeur', key: 'promptVendeur' },
     { title: 'Prompt Spécialiste', key: 'promptSpecialiste' },
   ];
+
+  const mapProjectToPayload = (project) => ({
+    nom_du_projet: project.nom || null,
+    type_projet: project.typeProjet || null,
+    type_secteur: project.type || null,
+    partenaire_client: project.partenaire || null,
+    statut: project.statut || null,
+    objectif: project.objectif || null,
+    prochaine_action: project.action || null,
+    prompt_marketing: project.promptMarketing || null,
+    prompt_partenaire: project.promptPartenaire || null,
+    prompt_vendeur: project.promptVendeur || null,
+    prompt_specialiste: project.promptSpecialiste || null,
+    priorite: project.priorite || null,
+  });
+
+  const mapSupabaseRowToProject = (row, fallback = {}) => ({
+    id: row?.id ?? fallback.id ?? generateProjectId(),
+    nom: row?.nom_du_projet ?? fallback.nom ?? '',
+    type: row?.type_secteur ?? fallback.type ?? '',
+    typeProjet: row?.type_projet ?? fallback.typeProjet ?? 'Filiale',
+    partenaire: row?.partenaire_client ?? fallback.partenaire ?? '',
+    statut: row?.statut ?? fallback.statut ?? '',
+    objectif: row?.objectif ?? fallback.objectif ?? '',
+    action: row?.prochaine_action ?? fallback.action ?? '',
+    promptMarketing: row?.prompt_marketing ?? fallback.promptMarketing ?? '',
+    promptPartenaire: row?.prompt_partenaire ?? fallback.promptPartenaire ?? '',
+    promptVendeur: row?.prompt_vendeur ?? fallback.promptVendeur ?? '',
+    promptSpecialiste: row?.prompt_specialiste ?? fallback.promptSpecialiste ?? '',
+    priorite: row?.priorite ?? fallback.priorite ?? 'Moyenne',
+    created_at: row?.created_at ?? fallback.created_at ?? new Date().toISOString(),
+  });
 
   const openProjectModal = (project) => {
     setActiveProjectId(project.id);
@@ -347,7 +334,7 @@ function Dashboard() {
     setProjectModalStatus({ type: '', message: '' });
   };
 
-  const handleSaveProjectChanges = () => {
+  const handleSaveProjectChanges = async () => {
     if (!editedProject) return;
     setIsProjectSaving(true);
     setProjectModalStatus({ type: '', message: '' });
@@ -355,17 +342,39 @@ function Dashboard() {
     let updatedRecord = null;
 
     try {
+      let supabaseRow = null;
+
+      if (supabase && editedProject.id) {
+        const payload = mapProjectToPayload(editedProject);
+        const { data, error } = await supabase
+          .from('projects')
+          .update(payload)
+          .eq('id', editedProject.id)
+          .select()
+          .maybeSingle();
+
+        if (error) {
+          throw error;
+        }
+
+        supabaseRow = data;
+        console.log('✅ Projet mis à jour :', data);
+      } else if (!supabase) {
+        console.warn('Supabase non configuré, mise à jour uniquement côté client.');
+      }
+
+      const projectToPersist = supabaseRow
+        ? mapSupabaseRowToProject(supabaseRow, editedProject)
+        : { ...editedProject };
+
       setProjects((prev) => {
         const updated = prev.map((project) => {
-          if (project.id !== editedProject.id) return project;
-          return {
-            ...project,
-            ...editedProject,
-          };
+          if (project.id !== projectToPersist.id) return project;
+          return projectToPersist;
         });
         updatedRecord =
-          updated.find((project) => project.id === editedProject.id) ||
-          editedProject;
+          updated.find((project) => project.id === projectToPersist.id) ||
+          projectToPersist;
         saveProjects(updated);
         return updated;
       });
@@ -386,6 +395,14 @@ function Dashboard() {
       setProjectModalStatus({
         type: 'error',
         message: 'Impossible de sauvegarder les modifications.',
+      });
+      setProjects((prev) => {
+        const updated = prev.map((project) => {
+          if (project.id !== editedProject.id) return project;
+          return { ...project, ...editedProject };
+        });
+        saveProjects(updated);
+        return updated;
       });
     } finally {
       setIsProjectSaving(false);
